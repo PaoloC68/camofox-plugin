@@ -1,0 +1,9 @@
+name: camofox_browser
+title: CamoFox Browser
+description: Anti-detection browser integration with VNC viewing for CAPTCHAs and visual interaction.
+version: 1.0.0
+settings_sections:
+  - external
+per_project_config: true
+per_agent_config: false
+always_enabled: false

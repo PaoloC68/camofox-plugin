@@ -1,0 +1,358 @@
+<html>
+<head>
+    <title>CamoFox Browser Settings</title>
+    <script type="module">
+        import { store } from "/plugins/camofox_browser/webui/camofox-store.js";
+    </script>
+</head>
+<body>
+    <div x-data="{
+        testStatus: '',
+        testing: false,
+        setupStatus: '',
+        setting_up: false,
+        generating: false,
+        starting: false,
+        installInfo: null,
+        async checkStatus() {
+            try {
+                const res = await fetchApi('/plugins/camofox_browser/camofox_setup', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({action: 'full_status'})
+                });
+                this.installInfo = await res.json();
+            } catch(e) {
+                this.installInfo = {ok: false, error: e.message};
+            }
+        },
+        async generateKeys() {
+            this.generating = true;
+            try {
+                const res = await fetchApi('/plugins/camofox_browser/camofox_setup', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({action: 'generate_keys'})
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    config.api_key = data.api_key;
+                    config.admin_key = data.admin_key;
+                }
+            } catch(e) {}
+            this.generating = false;
+        },
+        async startServer() {
+            this.starting = true;
+            this.setupStatus = 'Starting CamoFox server...';
+            try {
+                const res = await fetchApi('/plugins/camofox_browser/camofox_setup', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        action: 'start_server',
+                        api_key: config.api_key || '',
+                        admin_key: config.admin_key || ''
+                    })
+                });
+                const data = await res.json();
+                this.setupStatus = data.message || (data.ok ? 'Server started' : data.error);
+                await this.checkStatus();
+            } catch(e) {
+                this.setupStatus = 'Error: ' + e.message;
+            }
+            this.starting = false;
+        },
+        async runDiagnose() {
+            this.testing = true;
+            this.testStatus = 'Running diagnostics...';
+            try {
+                const res = await fetchApi('/plugins/camofox_browser/camofox_health', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({action: 'diagnose'})
+                });
+                const data = await res.json();
+                if (data.all_pass) {
+                    this.testStatus = 'All checks passed — CamoFox is fully operational.';
+                } else {
+                    let msg = 'Issues found: ';
+                    for (const [k, v] of Object.entries(data.checks || {})) {
+                        if (!v.pass) msg += k + ' (' + (v.hint || v.error || 'failed') + ') ';
+                    }
+                    this.testStatus = msg;
+                }
+            } catch(e) {
+                this.testStatus = 'Diagnose error: ' + e.message;
+            }
+            this.testing = false;
+        },
+        async testConnection() {
+            this.testing = true;
+            this.testStatus = 'Checking...';
+            try {
+                const res = await fetchApi('/plugins/camofox_browser/camofox_health', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({action: 'check'})
+                });
+                const data = await res.json();
+                this.testStatus = data.status === 'connected' ? 'Connected' : 'Unreachable: ' + (data.error || 'Unknown');
+            } catch(e) {
+                this.testStatus = 'Error: ' + e.message;
+            }
+            this.testing = false;
+        }
+    }" x-init="checkStatus()">
+
+        <div class="camofox-config">
+
+            <!-- STATUS BANNER -->
+            <div class="camofox-status-banner" x-show="installInfo">
+                <template x-if="installInfo && installInfo.server_status === 'running'">
+                    <div class="camofox-banner ok">
+                        <span class="material-symbols-outlined">check_circle</span>
+                        <span>CamoFox is running and connected.</span>
+                    </div>
+                </template>
+                <template x-if="installInfo && installInfo.server_status === 'stopped'">
+                    <div class="camofox-banner warn">
+                        <span class="material-symbols-outlined">warning</span>
+                        <span>CamoFox is installed but the server is not running.</span>
+                        <button class="button confirm" :disabled="starting" @click="startServer()" style="margin-left:auto;">
+                            <span class="material-symbols-outlined" style="font-size:1rem;margin-right:4px;">play_arrow</span>
+                            <span x-text="starting ? 'Starting...' : 'Start Server'"></span>
+                        </button>
+                    </div>
+                </template>
+                <template x-if="installInfo && installInfo.server_status === 'not_installed'">
+                    <div class="camofox-banner error">
+                        <span class="material-symbols-outlined">error</span>
+                        <span>CamoFox is not installed. Run the <strong>Setup Script</strong> from the Plugins page to install it.</span>
+                    </div>
+                </template>
+                <div x-show="setupStatus" class="camofox-banner info" style="margin-top:4px;">
+                    <span class="material-symbols-outlined">info</span>
+                    <span x-text="setupStatus"></span>
+                </div>
+                <div x-show="installInfo && (!installInfo.websockify_installed || !installInfo.novnc_installed)" class="camofox-banner warn" style="margin-top:4px;">
+                    <span class="material-symbols-outlined">desktop_windows</span>
+                    <span>Visible browser mode is incomplete. Install `websockify` and noVNC assets, then the embedded viewer will work through the normal Agent Zero URL.</span>
+                </div>
+            </div>
+
+            <!-- SECTION: Connection -->
+            <div class="camofox-section-title">Connection</div>
+
+            <div class="field">
+                <div class="field-label">
+                    <div class="field-title">Server URL</div>
+                    <div class="field-description">CamoFox server address</div>
+                </div>
+                <div class="field-control">
+                    <input type="text" x-model="config.server_url" placeholder="http://localhost:9377" />
+                </div>
+            </div>
+
+            <div class="field">
+                <div class="field-label">
+                    <div class="field-title">Test Connection</div>
+                    <div class="field-description" x-text="testStatus || 'Verify the server, browser launch, and same-origin embedded viewer runtime are ready'"></div>
+                </div>
+                <div class="field-control" style="display:flex;gap:8px;">
+                    <button class="button" :disabled="testing" @click="testConnection()">
+                        <span class="material-symbols-outlined" style="font-size:1rem;margin-right:4px;">lan</span>
+                        <span x-text="testing ? 'Checking...' : 'Test'"></span>
+                    </button>
+                    <button class="button" :disabled="testing" @click="runDiagnose()">
+                        <span class="material-symbols-outlined" style="font-size:1rem;margin-right:4px;">troubleshoot</span>
+                        <span x-text="testing ? 'Diagnosing...' : 'Diagnose'"></span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- SECTION: Security -->
+            <div class="camofox-section-title">Security Keys</div>
+
+            <div class="field">
+                <div class="field-label">
+                    <div class="field-title">API Key</div>
+                    <div class="field-description">Bearer token for protected endpoints. Must match the server's CAMOFOX_API_KEY.</div>
+                </div>
+                <div class="field-control">
+                    <input type="password" x-model="config.api_key" placeholder="Not set (no auth)" />
+                </div>
+            </div>
+
+            <div class="field">
+                <div class="field-label">
+                    <div class="field-title">Admin Key</div>
+                    <div class="field-description">Required for server stop. Must match the server's CAMOFOX_ADMIN_KEY.</div>
+                </div>
+                <div class="field-control">
+                    <input type="password" x-model="config.admin_key" placeholder="Not set (no admin access)" />
+                </div>
+            </div>
+
+            <div class="field">
+                <div class="field-label">
+                    <div class="field-title">Generate New Keys</div>
+                    <div class="field-description">Create random secure keys for both API and Admin. Save settings after generating, then restart the server for keys to take effect.</div>
+                </div>
+                <div class="field-control">
+                    <button class="button" :disabled="generating" @click="generateKeys()">
+                        <span class="material-symbols-outlined" style="font-size:1rem;margin-right:4px;">key</span>
+                        <span x-text="generating ? 'Generating...' : 'Generate Keys'"></span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- SECTION: Browser Defaults -->
+            <div class="camofox-section-title">Browser Defaults</div>
+
+            <div class="field">
+                <div class="field-label">
+                    <div class="field-title">Default User ID</div>
+                    <div class="field-description">Override auto-derived userId. Leave empty for automatic (a0-agent-N)</div>
+                </div>
+                <div class="field-control">
+                    <input type="text" x-model="config.default_user_id" placeholder="Auto-derived from agent context" />
+                </div>
+            </div>
+
+            <div class="field">
+                <div class="field-label">
+                    <div class="field-title">Default Display Mode</div>
+                    <div class="field-description">Initial browser display mode</div>
+                </div>
+                <div class="field-control">
+                    <select x-model="config.default_headless">
+                        <option value="true">Headless (fastest, no display)</option>
+                        <option value="virtual">Virtual (VNC viewable)</option>
+                        <option value="false">Headed (system display)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="field">
+                <div class="field-label">
+                    <div class="field-title">Default Geo Preset</div>
+                    <div class="field-description">Geolocation/timezone preset for browser fingerprint</div>
+                </div>
+                <div class="field-control">
+                    <select x-model="config.default_geo_preset">
+                        <option value="">None</option>
+                        <option value="us-east">US East (New York)</option>
+                        <option value="us-west">US West (Los Angeles)</option>
+                        <option value="uk">UK (London)</option>
+                        <option value="germany">Germany (Berlin)</option>
+                        <option value="japan">Japan (Tokyo)</option>
+                        <option value="singapore">Singapore</option>
+                        <option value="australia">Australia (Sydney)</option>
+                        <option value="vietnam">Vietnam (Ho Chi Minh)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- SECTION: Server Management -->
+            <div class="camofox-section-title">Server Management</div>
+
+            <div class="field">
+                <div class="field-label">
+                    <div class="field-title">Auto-start Server</div>
+                    <div class="field-description">Start CamoFox server automatically when the agent first uses a browser tool</div>
+                </div>
+                <div class="field-control">
+                    <label class="switch">
+                        <input type="checkbox" x-model="config.auto_start_server" />
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="field">
+                <div class="field-label">
+                    <div class="field-title">Start / Stop Server</div>
+                    <div class="field-description">Manually control the CamoFox server process</div>
+                </div>
+                <div class="field-control" style="display:flex;gap:8px;">
+                    <button class="button confirm" :disabled="starting" @click="startServer()">
+                        <span class="material-symbols-outlined" style="font-size:1rem;margin-right:4px;">play_arrow</span> Start
+                    </button>
+                    <button class="button"
+                        @click="
+                            fetchApi('/plugins/camofox_browser/camofox_health', {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify({action: 'stop'})
+                            }).then(r=>r.json()).then(d=>{
+                                setupStatus = d.ok ? 'Server stopped.' : d.error;
+                                setTimeout(()=>checkStatus(), 2000);
+                            });
+                        ">
+                        <span class="material-symbols-outlined" style="font-size:1rem;margin-right:4px;">stop</span> Stop
+                    </button>
+                    <button class="button" @click="checkStatus()">
+                        <span class="material-symbols-outlined" style="font-size:1rem;margin-right:4px;">refresh</span> Refresh
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <style>
+        .camofox-config {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+        .camofox-config .field-description {
+            font-size: 0.8rem;
+            opacity: 0.6;
+        }
+        .camofox-section-title {
+            font-family: var(--font-family-main);
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--color-text);
+            padding-top: var(--spacing-sm);
+            border-top: 1px solid var(--color-border);
+            margin-top: var(--spacing-xs);
+        }
+        .camofox-banner {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            padding: var(--spacing-sm) var(--spacing-md);
+            border-radius: calc(var(--border-radius) / 2);
+            font-family: var(--font-family-main);
+            font-size: 0.85rem;
+        }
+        .camofox-banner .material-symbols-outlined {
+            font-size: 1.2rem;
+            flex-shrink: 0;
+        }
+        .camofox-banner.ok {
+            background: rgba(76, 175, 80, 0.12);
+            color: #4caf50;
+            border: 1px solid rgba(76, 175, 80, 0.25);
+        }
+        .camofox-banner.warn {
+            background: rgba(255, 152, 0, 0.12);
+            color: #ff9800;
+            border: 1px solid rgba(255, 152, 0, 0.25);
+        }
+        .camofox-banner.error {
+            background: rgba(244, 67, 54, 0.12);
+            color: #f44336;
+            border: 1px solid rgba(244, 67, 54, 0.25);
+        }
+        .camofox-banner.info {
+            background: rgba(33, 150, 243, 0.12);
+            color: #2196f3;
+            border: 1px solid rgba(33, 150, 243, 0.25);
+        }
+    </style>
+</body>
+</html>

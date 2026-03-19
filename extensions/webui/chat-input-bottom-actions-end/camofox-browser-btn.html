@@ -1,0 +1,183 @@
+<div x-data="{
+        panelModule: null,
+        async setupCamofoxViewer() {
+            await import('/plugins/camofox_browser/webui/camofox-store.js');
+            this.panelModule = await import('/plugins/camofox_browser/webui/camofox-viewer-panel.js');
+            this.$watch('$store.camofox?.panelVisible', (visible) => {
+                if (visible) this.$nextTick(() => this.ensurePanelReady());
+            });
+            this.$nextTick(() => this.ensurePanelReady());
+        },
+        ensurePanelReady() {
+            const el = document.getElementById('camofox-viewer-panel');
+            if (el && this.panelModule) this.panelModule.initPanel(el);
+        }
+    }"
+    x-init="setupCamofoxViewer()">
+
+    <!-- BROWSER BUTTON -->
+    <button class="text-button camofox-browser-btn"
+            x-show="$store.camofox && $store.camofox.connected"
+            :class="{
+                'camofox-glow-blue': $store.camofox?.agentBrowsing && !$store.camofox?.needsUserAttention,
+                'camofox-glow-gold': $store.camofox?.needsUserAttention
+            }"
+            @click="$store.camofox.showBrowser()"
+            :title="$store.camofox?.needsUserAttention
+                ? 'Browser needs your attention'
+                : $store.camofox?.agentBrowsing
+                    ? 'Agent is browsing — click to view'
+                    : 'Open CamoFox browser viewer'">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+            <line x1="8" y1="21" x2="16" y2="21"/>
+            <line x1="12" y1="17" x2="12" y2="21"/>
+        </svg>
+        <p x-text="$store.camofox?.needsUserAttention
+            ? 'Browser (needs you)'
+            : $store.camofox?.agentBrowsing
+                ? 'Browser (active)'
+                : 'Browser'"></p>
+    </button>
+
+    <template x-if="$store.camofox">
+        <div id="camofox-viewer-panel" class="camofox-viewer-panel"
+             x-show="$store.camofox.panelVisible" x-transition.opacity>
+            <div class="camofox-title-bar">
+                <span class="camofox-title">
+                    <span class="material-symbols-outlined" style="font-size:1rem;margin-right:4px;">language</span>
+                    CamoFox Browser
+                </span>
+                <div class="camofox-controls">
+                    <button @click="$store.camofox.panelMinimized ? $store.camofox.restorePanel() : $store.camofox.minimizePanel()"
+                            :title="$store.camofox.panelMinimized ? 'Restore' : 'Minimize'">
+                        <span class="material-symbols-outlined"
+                              x-text="$store.camofox.panelMinimized ? 'open_in_full' : 'minimize'"></span>
+                    </button>
+                    <button @click="$store.camofox.togglePanel()" title="Close">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+            </div>
+            <div class="camofox-body" x-show="!$store.camofox.panelMinimized">
+                <template x-if="$store.camofox.vncUrl">
+                    <iframe :src="$store.camofox.vncUrl" class="camofox-vnc-frame"
+                            allow="clipboard-read; clipboard-write"
+                            sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
+                </template>
+                <template x-if="!$store.camofox.vncUrl">
+                    <div class="camofox-placeholder">
+                        <span class="material-symbols-outlined" style="font-size:2rem;opacity:0.3;">desktop_access_disabled</span>
+                        <div style="margin-top:8px;">No browser visible — agent is in headless mode</div>
+                    </div>
+                </template>
+            </div>
+            <div class="camofox-status-bar" x-show="!$store.camofox.panelMinimized">
+                <span class="camofox-status-dot" :class="$store.camofox.connected ? 'connected' : 'disconnected'"></span>
+                <span x-text="$store.camofox.connected ? 'Connected' : 'Disconnected'" style="font-size:0.75rem;"></span>
+                <span style="flex:1;"></span>
+                <span x-text="$store.camofox.displayMode" style="font-size:0.75rem;opacity:0.6;"></span>
+            </div>
+        </div>
+    </template>
+
+    <style>
+        .camofox-browser-btn.camofox-glow-blue {
+            color: #4da6ff !important;
+            opacity: 1 !important;
+            animation: camofox-pulse-blue 2s ease-in-out infinite;
+        }
+        @keyframes camofox-pulse-blue {
+            0%, 100% { filter: drop-shadow(0 0 3px rgba(77, 166, 255, 0.4)); }
+            50%      { filter: drop-shadow(0 0 8px rgba(77, 166, 255, 0.8)); }
+        }
+        .camofox-browser-btn.camofox-glow-gold {
+            color: #f5b942 !important;
+            opacity: 1 !important;
+            animation: camofox-pulse-gold 1.2s ease-in-out infinite;
+        }
+        @keyframes camofox-pulse-gold {
+            0%, 100% { filter: drop-shadow(0 0 3px rgba(245, 185, 66, 0.5)); }
+            50%      { filter: drop-shadow(0 0 10px rgba(245, 185, 66, 0.9)); }
+        }
+        .camofox-viewer-panel {
+            position: fixed;
+            background: var(--color-panel);
+            border: 1px solid var(--color-border);
+            border-radius: var(--border-radius);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            z-index: 900;
+            min-width: 400px;
+            min-height: 200px;
+            resize: both;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .camofox-title-bar {
+            background: var(--color-background-hover);
+            border-bottom: 1px solid var(--color-border);
+            padding: var(--spacing-xs) var(--spacing-sm);
+            cursor: grab;
+            font-family: var(--font-family-main);
+            color: var(--color-text);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+            flex-shrink: 0;
+        }
+        .camofox-title {
+            display: flex;
+            align-items: center;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        .camofox-controls {
+            display: flex;
+            gap: 2px;
+        }
+        .camofox-controls button {
+            background: none;
+            border: none;
+            color: var(--color-primary);
+            cursor: pointer;
+            padding: 2px 4px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+        }
+        .camofox-controls button:hover {
+            color: var(--color-accent);
+            background: var(--color-background-hover);
+        }
+        .camofox-controls .material-symbols-outlined { font-size: 1.1rem; }
+        .camofox-body { flex: 1; min-height: 0; display: flex; }
+        .camofox-vnc-frame { width: 100%; height: 100%; border: none; flex: 1; }
+        .camofox-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: var(--spacing-lg);
+            color: var(--color-primary);
+            font-family: var(--font-family-main);
+            font-size: 0.85rem;
+        }
+        .camofox-status-bar {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+            padding: var(--spacing-xxs) var(--spacing-sm);
+            border-top: 1px solid var(--color-border);
+            color: var(--color-primary);
+            font-family: var(--font-family-main);
+            flex-shrink: 0;
+        }
+        .camofox-status-dot { width: 6px; height: 6px; border-radius: 50%; }
+        .camofox-status-dot.connected { background: #4caf50; }
+        .camofox-status-dot.disconnected { background: var(--color-error-text); }
+    </style>
+</div>
