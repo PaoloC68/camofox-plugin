@@ -127,18 +127,23 @@ class CamofoxStartup(ApiHandler):
             return False
 
     async def _ensure_websockify(self) -> bool:
-        """Ensure websockify is running on port 6080."""
-        if self._is_websockify_running():
-            return True
+        """Start a FRESH single websockify instance, killing any stale ones first.
+        
+        Always restarts websockify to avoid stale/frozen connections where the
+        noVNC client is connected to an old websockify that lost its x11vnc link.
+        """
         novnc = "/opt/noVNC"
         if not os.path.isdir(novnc):
-            return False
-        websockify = shutil.which("websockify")
-        if not websockify:
-            return False
+            return self._is_websockify_running()  # Can't manage it, just check
+        websockify_bin = shutil.which("websockify")
+        if not websockify_bin:
+            return self._is_websockify_running()
+        # Always kill stale instances first
+        subprocess.run(["pkill", "-f", "websockify"], capture_output=True)
+        await asyncio.sleep(1)
         try:
             await asyncio.create_subprocess_exec(
-                "python3", websockify, "--web", novnc, "6080", "127.0.0.1:5999",
+                "python3", websockify_bin, "--web", novnc, "6080", "127.0.0.1:5999",
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,
             )
