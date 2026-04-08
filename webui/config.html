@@ -274,6 +274,17 @@
 
             <div class="field">
                 <div class="field-label">
+                    <div class="field-title">Home Page URL</div>
+                    <div class="field-description">Page loaded automatically after startup so the VNC panel shows content instead of a black screen. Leave empty to disable.</div>
+                </div>
+                <div class="field-control">
+                    <input type="url" x-model="config.default_home_url" placeholder="https://www.google.com" />
+                </div>
+            </div>
+
+
+            <div class="field">
+                <div class="field-label">
                     <div class="field-title">Auto-start Server</div>
                     <div class="field-description">Start CamoFox server automatically when the agent first uses a browser tool</div>
                 </div>

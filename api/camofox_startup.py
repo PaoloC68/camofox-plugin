@@ -260,6 +260,23 @@ class CamofoxStartup(ApiHandler):
         steps["watchdog"] = {"ok": watchdog_ok, "msg": "running" if watchdog_ok else "not started"}
         steps["x11vnc"] = {"ok": self._is_x11vnc_running(), "msg": "running" if self._is_x11vnc_running() else "starting..."}
 
+        # 6. Open default home tab so VNC panel shows a page instead of black screen
+        if virtual_ok:
+            cfg = get_config()
+            home_url = cfg.get("default_home_url", "https://www.google.com")
+            if home_url and home_url.strip():
+                try:
+                    client = CamofoxClient(
+                        base_url=cfg["server_url"],
+                        api_key=cfg.get("api_key", ""),
+                        admin_key=cfg.get("admin_key", ""),
+                    )
+                    await client.post("/sessions/a0-agent-0/new-tab", data={"url": home_url.strip()})
+                    await client.close()
+                    steps["home_tab"] = {"ok": True, "msg": home_url.strip()}
+                except Exception as e:
+                    steps["home_tab"] = {"ok": False, "msg": str(e)}
+
         all_ok = server_ok and virtual_ok
         return {
             "ok": all_ok,
