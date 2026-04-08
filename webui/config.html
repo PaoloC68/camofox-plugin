@@ -222,15 +222,22 @@
 
             <div class="field">
                 <div class="field-label">
-                    <div class="field-title">Default Display Mode</div>
-                    <div class="field-description">Initial browser display mode</div>
+                    <div class="field-title">Default Display Mode <em style="font-weight:normal;opacity:0.6;">(for next startup)</em></div>
+                    <div class="field-description">Mode applied when the server starts. Does NOT change the current running session.</div>
                 </div>
-                <div class="field-control">
+                <div class="field-control" style="display:flex;flex-direction:column;gap:6px;">
                     <select x-model="config.default_headless">
                         <option value="true">Headless (fastest, no display)</option>
-                        <option value="virtual">Virtual (VNC viewable)</option>
+                        <option value="virtual">Virtual (VNC viewable) — recommended</option>
                         <option value="false">Headed (system display)</option>
                     </select>
+                    <div style="display:flex;align-items:center;gap:6px;font-size:0.8rem;opacity:0.8;" x-data="{get store() { return window.Alpine?.store?.('camofox') || null; }}">
+                        <span class="material-symbols-outlined" style="font-size:1rem;">circle</span>
+                        <span>Live mode now: </span>
+                        <strong x-text="store?.displayMode ?? 'unknown'"></strong>
+                        <span x-show="store?.displayMode === 'headless'" style="color:#ff9800;">⚠ VNC panel will not show browser content</span>
+                        <span x-show="store?.displayMode === 'virtual'" style="color:#4caf50;">✓ VNC panel active</span>
+                    </div>
                 </div>
             </div>
 
