@@ -272,25 +272,64 @@
 
             <div class="field">
                 <div class="field-label">
-                    <div class="field-title">Start / Stop Server</div>
-                    <div class="field-description">Manually control the CamoFox server process</div>
+                    <div class="field-title">Start / Stop / Restart</div>
+                    <div class="field-description" x-text="setupStatus || 'Controls the full CamoFox+VNC stack: server, virtual display, x11vnc watchdog'"></div>
                 </div>
-                <div class="field-control" style="display:flex;gap:8px;">
-                    <button class="button confirm" :disabled="starting" @click="startServer()">
-                        <span class="material-symbols-outlined" style="font-size:1rem;margin-right:4px;">play_arrow</span> Start
+                <div class="field-control" style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <button class="button confirm" :disabled="starting" @click="
+                        starting = true;
+                        setupStatus = 'Starting full VNC stack (server + virtual mode + x11vnc)...';
+                        fetchApi('/plugins/camofox_browser/camofox_startup', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({action: 'start'})
+                        }).then(r=>r.json()).then(d=>{
+                            if (d.ok) {
+                                let parts = Object.entries(d.steps || {}).map(([k,v]) => k + ':' + (v.ok ? '✓' : '✗'));
+                                setupStatus = (d.message || 'Started') + ' — ' + parts.join(' ');
+                            } else {
+                                setupStatus = 'Error: ' + (d.error || JSON.stringify(d));
+                            }
+                            starting = false;
+                            setTimeout(()=>checkStatus(), 1000);
+                        }).catch(e=>{ setupStatus='Error: '+e.message; starting=false; });
+                    ">
+                        <span class="material-symbols-outlined" style="font-size:1rem;margin-right:4px;">play_arrow</span>
+                        <span x-text="starting ? 'Starting...' : 'Start'"></span>
                     </button>
-                    <button class="button"
-                        @click="
-                            fetchApi('/plugins/camofox_browser/camofox_health', {
-                                method: 'POST',
-                                headers: {'Content-Type': 'application/json'},
-                                body: JSON.stringify({action: 'stop'})
-                            }).then(r=>r.json()).then(d=>{
-                                setupStatus = d.ok ? 'Server stopped.' : d.error;
-                                setTimeout(()=>checkStatus(), 2000);
-                            });
-                        ">
+                    <button class="button" @click="
+                        setupStatus = 'Stopping full VNC stack...';
+                        fetchApi('/plugins/camofox_browser/camofox_startup', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({action: 'stop'})
+                        }).then(r=>r.json()).then(d=>{
+                            setupStatus = d.ok ? 'Stack stopped.' : ('Error: ' + d.error);
+                            setTimeout(()=>checkStatus(), 1500);
+                        }).catch(e=>{ setupStatus='Error: '+e.message; });
+                    ">
                         <span class="material-symbols-outlined" style="font-size:1rem;margin-right:4px;">stop</span> Stop
+                    </button>
+                    <button class="button" :disabled="starting" @click="
+                        starting = true;
+                        setupStatus = 'Restarting full VNC stack...';
+                        fetchApi('/plugins/camofox_browser/camofox_startup', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({action: 'restart'})
+                        }).then(r=>r.json()).then(d=>{
+                            if (d.ok) {
+                                let parts = Object.entries(d.steps || {}).map(([k,v]) => k + ':' + (v.ok ? '✓' : '✗'));
+                                setupStatus = (d.message || 'Restarted') + ' — ' + parts.join(' ');
+                            } else {
+                                setupStatus = 'Error: ' + (d.error || JSON.stringify(d));
+                            }
+                            starting = false;
+                            setTimeout(()=>checkStatus(), 1000);
+                        }).catch(e=>{ setupStatus='Error: '+e.message; starting=false; });
+                    ">
+                        <span class="material-symbols-outlined" style="font-size:1rem;margin-right:4px;">restart_alt</span>
+                        <span x-text="starting ? 'Restarting...' : 'Restart'"></span>
                     </button>
                     <button class="button" @click="checkStatus()">
                         <span class="material-symbols-outlined" style="font-size:1rem;margin-right:4px;">refresh</span> Refresh
