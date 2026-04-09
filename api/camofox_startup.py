@@ -265,6 +265,54 @@ class CamofoxStartup(ApiHandler):
         steps["watchdog"] = {"ok": watchdog_ok, "msg": "running" if watchdog_ok else "not started"}
         steps["x11vnc"] = {"ok": self._is_x11vnc_running(), "msg": "running" if self._is_x11vnc_running() else "starting..."}
 
+        # 6. Start openbox WM and maximize browser window to fill Xvfb display
+        if virtual_ok:
+            try:
+                # Get the display camoufox-bin is using
+                r = subprocess.run(["pgrep", "-f", "camoufox-bin"], capture_output=True, text=True)
+                pids = [p for p in r.stdout.strip().split("\n") if p.strip()]
+                disp = ":100"
+                for pid in pids:
+                    try:
+                        env_data = open(f"/proc/{pid}/environ", "rb").read().decode("utf-8", "replace")
+                        for var in env_data.split("\x00"):
+                            if var.startswith("DISPLAY="):
+                                disp = var.split("=", 1)[1]
+                                break
+                    except Exception:
+                        pass
+                # Start openbox WM (needed for wmctrl EWMH maximize)
+                env_disp = os.environ.copy()
+                env_disp["DISPLAY"] = disp
+                subprocess.Popen(
+                    ["openbox", "--sm-disable"],
+                    env=env_disp,
+                    stdout=open("/tmp/openbox.log", "w"),
+                    stderr=subprocess.STDOUT,
+                )
+                await asyncio.sleep(2)
+                # Maximize all Firefox/Camoufox windows
+                wins = subprocess.run(
+                    ["xdotool", "search", "--name", ""],
+                    capture_output=True, text=True, env=env_disp
+                ).stdout.strip().split("\n")
+                for wid in wins:
+                    if not wid.strip():
+                        continue
+                    name = subprocess.run(
+                        ["xdotool", "getwindowname", wid],
+                        capture_output=True, text=True, env=env_disp
+                    ).stdout.strip().lower()
+                    if any(k in name for k in ["firefox", "camoufox", "mozilla"]):
+                        wid_hex = hex(int(wid))
+                        subprocess.run(
+                            ["wmctrl", "-i", "-r", wid_hex, "-b", "add,maximized_vert,maximized_horz"],
+                            capture_output=True, env=env_disp
+                        )
+                steps["wm_maximize"] = {"ok": True, "msg": f"openbox+maximize on {disp}"}
+            except Exception as e:
+                steps["wm_maximize"] = {"ok": False, "msg": str(e)}
+
         # 6. Open default home tab so VNC panel shows a page instead of black screen
         if virtual_ok:
             cfg = get_config()
@@ -286,7 +334,7 @@ class CamofoxStartup(ApiHandler):
         return {
             "ok": all_ok,
             "message": "CamoFox VNC stack started successfully." if all_ok else "Stack started with warnings — check steps.",
-            "vnc_url": "http://localhost:6080/vnc.html?autoconnect=true&resize=scale",
+            "vnc_url": "http://localhost:6080/vnc.html?autoconnect=true&resize=remote",
             "steps": steps,
         }
 
