@@ -19,6 +19,16 @@ export function initPanel(panelEl) {
     panelEl.style.width = w + "px";
     panelEl.style.height = h + "px";
 
+    // Enable CSS corner-drag resize handles
+    panelEl.style.resize = "both";
+    panelEl.style.overflow = "hidden";
+    panelEl.style.minWidth = "320px";
+    panelEl.style.minHeight = "240px";
+
+    // Track panel size as fraction of viewport — used to scale on window resize
+    let widthRatio  = w / window.innerWidth;
+    let heightRatio = h / window.innerHeight;
+
     // Position: use saved position or default to top-right area
     if (store.panelPosition.x !== null && store.panelPosition.y !== null) {
         panelEl.style.left = store.panelPosition.x + "px";
@@ -65,22 +75,32 @@ export function initPanel(panelEl) {
         store.savePosition(rect.left, rect.top);
     });
 
-    // Resize observer
+    // Resize observer — save size and update viewport ratios after manual resize
     const resizeObserver = new ResizeObserver(() => {
         if (!isDragging) {
             store.saveSize(panelEl.offsetWidth, panelEl.offsetHeight);
+            // Update ratios so next window resize scales from the new size
+            widthRatio  = panelEl.offsetWidth  / window.innerWidth;
+            heightRatio = panelEl.offsetHeight / window.innerHeight;
         }
     });
     resizeObserver.observe(panelEl);
 
-    // Keep in viewport on window resize
+    // Keep in viewport AND scale proportionally on window resize
     window.addEventListener("resize", () => {
+        // Scale panel to maintain same viewport fraction
+        const newW = Math.max(320, Math.round(widthRatio  * window.innerWidth));
+        const newH = Math.max(240, Math.round(heightRatio * window.innerHeight));
+        panelEl.style.width  = newW + "px";
+        panelEl.style.height = newH + "px";
+
+        // Reposition if panel drifted out of viewport
         const rect = panelEl.getBoundingClientRect();
         if (rect.left > window.innerWidth - 100) {
-            panelEl.style.left = Math.max(0, window.innerWidth - panelEl.offsetWidth - 20) + "px";
+            panelEl.style.left = Math.max(0, window.innerWidth - newW - 20) + "px";
         }
         if (rect.top > window.innerHeight - 40) {
-            panelEl.style.top = Math.max(0, window.innerHeight - panelEl.offsetHeight - 20) + "px";
+            panelEl.style.top = Math.max(0, window.innerHeight - newH - 20) + "px";
         }
     });
 }
