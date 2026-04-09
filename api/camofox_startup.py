@@ -281,17 +281,11 @@ class CamofoxStartup(ApiHandler):
                                 break
                     except Exception:
                         pass
-                # Start openbox WM (needed for wmctrl EWMH maximize)
+                # Force browser window to fill Xvfb display using xdotool
                 env_disp = os.environ.copy()
                 env_disp["DISPLAY"] = disp
-                subprocess.Popen(
-                    ["openbox", "--sm-disable"],
-                    env=env_disp,
-                    stdout=open("/tmp/openbox.log", "w"),
-                    stderr=subprocess.STDOUT,
-                )
+                # Get Xvfb resolution from display
                 await asyncio.sleep(2)
-                # Maximize all Firefox/Camoufox windows
                 wins = subprocess.run(
                     ["xdotool", "search", "--name", ""],
                     capture_output=True, text=True, env=env_disp
@@ -304,11 +298,10 @@ class CamofoxStartup(ApiHandler):
                         capture_output=True, text=True, env=env_disp
                     ).stdout.strip().lower()
                     if any(k in name for k in ["firefox", "camoufox", "mozilla"]):
-                        wid_hex = hex(int(wid))
-                        subprocess.run(
-                            ["wmctrl", "-i", "-r", wid_hex, "-b", "add,maximized_vert,maximized_horz"],
-                            capture_output=True, env=env_disp
-                        )
+                        subprocess.run(["xdotool", "windowmove", "--sync", wid, "0", "0"],
+                                       capture_output=True, env=env_disp)
+                        subprocess.run(["xdotool", "windowsize", "--sync", wid, "1920", "1080"],
+                                       capture_output=True, env=env_disp)
                 steps["wm_maximize"] = {"ok": True, "msg": f"openbox+maximize on {disp}"}
             except Exception as e:
                 steps["wm_maximize"] = {"ok": False, "msg": str(e)}
@@ -334,7 +327,7 @@ class CamofoxStartup(ApiHandler):
         return {
             "ok": all_ok,
             "message": "CamoFox VNC stack started successfully." if all_ok else "Stack started with warnings — check steps.",
-            "vnc_url": "http://localhost:6080/vnc.html?autoconnect=true&resize=remote",
+            "vnc_url": "http://localhost:6080/vnc.html?autoconnect=true&resize=scale",
             "steps": steps,
         }
 

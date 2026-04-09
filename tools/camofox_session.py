@@ -88,7 +88,7 @@ class CamofoxSession(Tool):
                     port = server_url.rstrip("/").split(":")[-1]
                     if not port.isdigit():
                         port = "6080"
-                    vnc_url = f"http://localhost:6080/vnc.html?autoconnect=true&resize=remote"
+                    vnc_url = f"http://localhost:6080/vnc.html?autoconnect=true&resize=scale"
             else:
                 display_mode = "headed"
             shared_state.set_vnc(user_id, vnc_url, display_mode)
