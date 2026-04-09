@@ -1,23 +1,4 @@
-// CamoFox Firefox User Preferences Template
-// Apply to: /root/.camofox/profiles/<userId>/user.js
-//
-// WHAT THIS FIXES:
-// When running CamoFox in virtual display mode (Xvfb), Google OAuth and other
-// popup windows render as a black screen. This is caused by GPU-accelerated
-// compositing being unavailable in headless/virtual environments.
-//
-// HOW TO APPLY:
-// 1. Find your profile directory:
-//      ls /root/.camofox/profiles/
-// 2. Copy this file:
-//      cp scripts/user.js.template /root/.camofox/profiles/a0-agent-0/user.js
-//    (Replace 'a0-agent-0' with your actual profile directory name)
-// 3. Restart the CamoFox browser session for prefs to take effect.
-//
-// NOTE: These prefs are written to user.js which is re-applied on every Firefox
-// startup, overriding any conflicting prefs.js settings.
-
-// --- Disable GPU / hardware acceleration ---
+// Force software rendering for ALL windows including popups
 user_pref("gfx.webrender.all", false);
 user_pref("gfx.webrender.software", true);
 user_pref("gfx.webrender.enabled", false);
@@ -29,15 +10,14 @@ user_pref("layers.offmainthreadcomposition.enabled", false);
 user_pref("gfx.canvas.azure.backends", "cairo");
 user_pref("gfx.content.azure.backends", "cairo");
 user_pref("gfx.direct2d.disabled", true);
-
-// --- Disable media and sandbox processes (avoid rendering isolation issues) ---
 user_pref("media.rdd-process.enabled", false);
 user_pref("security.sandbox.content.level", 0);
 user_pref("dom.ipc.sandbox.content.level", 0);
-
-// --- Force popup windows to open as tabs ---
-// This prevents Google OAuth and similar popup windows from opening as
-// separate browser windows that render black in virtual displays.
-// Instead, they open as new tabs in the same window — fully visible in VNC.
+// Force popups to open as tabs
 user_pref("browser.link.open_newwindow", 3);
 user_pref("browser.link.open_newwindow.restriction", 0);
+// Disable Fission (site isolation) — fixes black cross-origin iframes and modals
+user_pref("fission.autostart", false);
+user_pref("fission.webContentIsolationStrategy", 0);
+user_pref("gfx.webrender.compositor", false);
+user_pref("gfx.webrender.compositor.force-enabled", false);
