@@ -147,7 +147,7 @@ class CamofoxStartup(ApiHandler):
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,
             )
-            await asyncio.sleep(1)
+            await asyncio.sleep(3)
             return self._is_websockify_running()
         except Exception:
             return False
@@ -302,23 +302,37 @@ class CamofoxStartup(ApiHandler):
                                        capture_output=True, env=env_disp)
                         subprocess.run(["xdotool", "windowsize", "--sync", wid, "1920", "1080"],
                                        capture_output=True, env=env_disp)
-                steps["wm_maximize"] = {"ok": True, "msg": f"openbox+maximize on {disp}"}
+                steps["wm_maximize"] = {"ok": True, "msg": f"maximize on {disp}"}
             except Exception as e:
                 steps["wm_maximize"] = {"ok": False, "msg": str(e)}
 
-        # 6. Open default home tab so VNC panel shows a page instead of black screen
+        # 7. Open default home tab using xdotool (API endpoint doesn't exist)
         if virtual_ok:
             cfg = get_config()
             home_url = cfg.get("default_home_url", "https://www.google.com")
             if home_url and home_url.strip():
                 try:
-                    client = CamofoxClient(
-                        base_url=cfg["server_url"],
-                        api_key=cfg.get("api_key", ""),
-                        admin_key=cfg.get("admin_key", ""),
-                    )
-                    await client.post("/sessions/a0-agent-0/new-tab", data={"url": home_url.strip()})
-                    await client.close()
+                    # Find browser display
+                    disp = ":100"
+                    r = subprocess.run(["pgrep", "-f", "camoufox-bin"], capture_output=True, text=True)
+                    for pid in r.stdout.strip().split("\n"):
+                        if not pid.strip(): continue
+                        try:
+                            env_data = open(f"/proc/{pid}/environ", "rb").read().decode("utf-8", "replace")
+                            for var in env_data.split("\x00"):
+                                if var.startswith("DISPLAY="):
+                                    disp = var.split("=", 1)[1]
+                                    break
+                        except Exception:
+                            pass
+                    env_disp = os.environ.copy()
+                    env_disp["DISPLAY"] = disp
+                    # Use xdotool to type URL in browser address bar
+                    subprocess.run(["xdotool", "key", "ctrl+l"], capture_output=True, env=env_disp)
+                    await asyncio.sleep(0.5)
+                    subprocess.run(["xdotool", "type", "--clearmodifiers", home_url.strip()], capture_output=True, env=env_disp)
+                    await asyncio.sleep(0.3)
+                    subprocess.run(["xdotool", "key", "Return"], capture_output=True, env=env_disp)
                     steps["home_tab"] = {"ok": True, "msg": home_url.strip()}
                 except Exception as e:
                     steps["home_tab"] = {"ok": False, "msg": str(e)}
