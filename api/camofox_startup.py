@@ -138,9 +138,9 @@ class CamofoxStartup(ApiHandler):
         websockify_bin = shutil.which("websockify")
         if not websockify_bin:
             return self._is_websockify_running()
-        # Always kill stale instances first
-        subprocess.run(["pkill", "-f", "websockify"], capture_output=True)
-        await asyncio.sleep(1)
+        # Always kill stale instances first (use -9 to ensure clean kill)
+        subprocess.run(["pkill", "-9", "-f", "websockify"], capture_output=True)
+        await asyncio.sleep(2)  # Wait for port 6080 to be released
         try:
             await asyncio.create_subprocess_exec(
                 "python3", websockify_bin, "--web", novnc, "6080", "127.0.0.1:5999",
