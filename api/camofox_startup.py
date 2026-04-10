@@ -24,6 +24,15 @@ SERVER_JS_SEARCH = [
     "/usr/lib/node_modules/camofox-browser/dist/src/server.js",
 ]
 
+def _get_vnc_resolution():
+    """Get VNC resolution from config, returns (width, height, depth_str)."""
+    cfg = get_config()
+    res = cfg.get("vnc_resolution", "1280x800")
+    parts = res.lower().split("x")
+    w = int(parts[0]) if len(parts) >= 1 else 1280
+    h = int(parts[1]) if len(parts) >= 2 else 800
+    return w, h, f"{w}x{h}x24"
+
 SOFTWARE_RENDERING_ENV = {
     "LIBGL_ALWAYS_SOFTWARE": "1",
     "GALLIUM_DRIVER": "llvmpipe",
@@ -116,8 +125,9 @@ class CamofoxStartup(ApiHandler):
         if self._is_xvfb_running():
             return True
         try:
+            _, _, res_str = _get_vnc_resolution()
             await asyncio.create_subprocess_exec(
-                "Xvfb", ":99", "-screen", "0", "1920x1080x24", "-ac", "-nolisten", "tcp",
+                "Xvfb", ":99", "-screen", "0", res_str, "-ac", "-nolisten", "tcp",
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,
             )
@@ -162,6 +172,8 @@ class CamofoxStartup(ApiHandler):
         cfg = get_config()
         env = os.environ.copy()
         env.update(SOFTWARE_RENDERING_ENV)
+        _, _, res_str = _get_vnc_resolution()
+        env["CAMOFOX_VNC_RESOLUTION"] = res_str
         port = cfg.get("server_url", "http://localhost:9377").split(":")[-1].rstrip("/")
         env["CAMOFOX_PORT"] = str(port)
         env["CAMOFOX_HEADLESS"] = normalize_headless_mode(cfg.get("default_headless", True))
@@ -284,7 +296,7 @@ class CamofoxStartup(ApiHandler):
                 # Force browser window to fill Xvfb display using xdotool
                 env_disp = os.environ.copy()
                 env_disp["DISPLAY"] = disp
-                # Get Xvfb resolution from display
+                vnc_w, vnc_h, _ = _get_vnc_resolution()
                 await asyncio.sleep(2)
                 wins = subprocess.run(
                     ["xdotool", "search", "--name", ""],
@@ -300,9 +312,9 @@ class CamofoxStartup(ApiHandler):
                     if any(k in name for k in ["firefox", "camoufox", "mozilla"]):
                         subprocess.run(["xdotool", "windowmove", "--sync", wid, "0", "0"],
                                        capture_output=True, env=env_disp)
-                        subprocess.run(["xdotool", "windowsize", "--sync", wid, "1920", "1080"],
+                        subprocess.run(["xdotool", "windowsize", "--sync", wid, str(vnc_w), str(vnc_h)],
                                        capture_output=True, env=env_disp)
-                steps["wm_maximize"] = {"ok": True, "msg": f"maximize on {disp}"}
+                steps["wm_maximize"] = {"ok": True, "msg": f"maximize on {disp} at {vnc_w}x{vnc_h}"}
             except Exception as e:
                 steps["wm_maximize"] = {"ok": False, "msg": str(e)}
 

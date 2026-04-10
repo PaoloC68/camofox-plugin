@@ -6,3 +6,4 @@ default_headless: "virtual"
 default_geo_preset: ""
 auto_start_server: true
 default_home_url: "https://www.google.com"
+vnc_resolution: "1280x800"
