@@ -9,7 +9,7 @@ from usr.plugins.camofox_browser.helpers.client import (
     CamofoxApiError,
     CamofoxAuthError,
 )
-from usr.plugins.camofox_browser.helpers.config import get_config
+from usr.plugins.camofox_browser.helpers.config import get_config, resolve_display_mode
 from usr.plugins.camofox_browser.helpers.user_id import resolve_user_id
 from usr.plugins.camofox_browser.helpers import state as shared_state
 
@@ -70,14 +70,18 @@ class CamofoxSession(Tool):
         # --- REST-based actions (no CLI needed) ---
 
         if action == "toggle_display":
-            headless = a.get("headless", True)
+            if "headless" in a:
+                headless = a["headless"]
+            else:
+                cfg = get_config()
+                headless = resolve_display_mode(cfg.get("default_headless", True))
             resp = await client.post(
                 f"/sessions/{user_id}/toggle-display",
                 data={"headless": headless},
             )
             vnc_url = resp.get("vncUrl")
-            mode = str(resp.get("headless", headless))
-            if mode in ("True", "true"):
+            mode = str(resp.get("headless", headless)).strip().lower()
+            if mode in ("true", "headless"):
                 display_mode = "headless"
             elif mode == "virtual":
                 display_mode = "virtual"

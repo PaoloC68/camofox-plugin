@@ -8,7 +8,7 @@ from usr.plugins.camofox_browser.helpers.client import (
     CamofoxApiError,
     CamofoxAuthError,
 )
-from usr.plugins.camofox_browser.helpers.config import get_config
+from usr.plugins.camofox_browser.helpers.config import get_config, resolve_display_mode
 from usr.plugins.camofox_browser.helpers.user_id import resolve_user_id
 from usr.plugins.camofox_browser.helpers import state as shared_state
 
@@ -58,20 +58,33 @@ class CamofoxBrowse(Tool):
         # Signal that the agent is actively browsing
         shared_state.set_browsing(user_id, active=True)
 
-        # Auto-switch to virtual display if still headless so the WebUI
-        # viewer can connect immediately without waiting for a user click.
+        # Honor the user-selected display mode from config. If the live
+        # session is in a different mode, toggle it. Failures surface to
+        # the caller instead of being swallowed.
+        cfg = get_config()
+        desired = resolve_display_mode(cfg.get("default_headless", True))
         current = shared_state.get(user_id)
-        if current.get("display_mode", "headless") == "headless":
+        if current.get("display_mode", "headless") != desired:
             try:
                 client = _get_client()
                 data = await client.post(
                     f"/sessions/{user_id}/toggle-display",
-                    data={"headless": "virtual"},
+                    data={"headless": desired},
                 )
-                vnc_url = data.get("vncUrl", "")
-                shared_state.set_vnc(user_id, vnc_url, "virtual")
-            except Exception:
-                pass  # non-fatal: viewer just won't be available yet
+                vnc_url = data.get("vncUrl", "") or ""
+                if desired == "headless" or not vnc_url:
+                    shared_state.clear_vnc(user_id, "headless")
+                else:
+                    shared_state.set_vnc(user_id, vnc_url, desired)
+            except (CamofoxConnectionError, CamofoxApiError, CamofoxAuthError) as e:
+                return Response(
+                    message=(
+                        f"Could not switch browser to {desired!r} mode: {e}. "
+                        "Check that the CamoFox server is running and that "
+                        "virtual display mode is supported in this environment."
+                    ),
+                    break_loop=False,
+                )
 
         try:
             result = await self._dispatch(action, user_id)

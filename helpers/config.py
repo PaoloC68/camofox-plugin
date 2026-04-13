@@ -24,6 +24,19 @@ def normalize_headless_mode(value) -> str:
     return "true"
 
 
+def resolve_display_mode(value) -> str:
+    """Resolve a config value to the display_mode strings used by state/API:
+    "headless" | "virtual" | "headed"."""
+    if isinstance(value, bool):
+        return "headless" if value else "headed"
+    normalized = str(value).strip().lower()
+    if normalized == "virtual":
+        return "virtual"
+    if normalized in {"false", "0", "no", "headed"}:
+        return "headed"
+    return "headless"
+
+
 def get_config(project_name: str | None = None, agent_profile: str | None = None) -> dict:
     """Return plugin config merged over defaults."""
     from helpers import plugins  # lazy: avoids framework import chain at module load time

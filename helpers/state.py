@@ -73,15 +73,16 @@ def _normalize_entry(entry: dict) -> dict:
     is_vnc_idle = ts and age > _VNC_IDLE_TTL_SECONDS
     if normalized.get("browsing") and not normalized.get("blocked") and is_browsing_stale:
         normalized["browsing"] = False
+    # Clear idle VNC URL after timeout, but preserve the user-selected
+    # display_mode — that reflects intent and should only change via an
+    # explicit toggle.
     if (
         not normalized.get("browsing")
         and not normalized.get("blocked")
-        and normalized.get("display_mode", "headless") != "headless"
         and normalized.get("vnc_url")
         and is_vnc_idle
     ):
         normalized["vnc_url"] = ""
-        normalized["display_mode"] = "headless"
     return normalized
 
 
