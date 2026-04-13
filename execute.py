@@ -270,13 +270,28 @@ def generate_keys():
     return api_key, admin_key
 
 
+def _config_path():
+    return os.path.join(os.path.dirname(__file__), "config.json")
+
+
+def load_plugin_config():
+    """Load existing plugin config, or return empty dict if missing/invalid."""
+    path = _config_path()
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path) as f:
+            return json.load(f) or {}
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
 def save_plugin_config(config_dict):
     """Save plugin config to the standard location."""
-    config_dir = os.path.dirname(__file__)
-    config_path = os.path.join(config_dir, "config.json")
-    with open(config_path, "w") as f:
+    path = _config_path()
+    with open(path, "w") as f:
         json.dump(config_dict, f, indent=2)
-    print(f"  Config saved to {config_path}")
+    print(f"  Config saved to {path}")
 
 
 def stop_existing_server(port=9377):
@@ -510,21 +525,33 @@ def main():
     print_step("Step 4/7: Checking Camoufox browser binary")
     fetch_camoufox_browser()
 
-    # Step 5: Generate keys
-    print_step("Step 5/7: Generating API keys")
-    api_key, admin_key = generate_keys()
-    print(f"  API Key:   {api_key[:8]}...{api_key[-4:]}")
-    print(f"  Admin Key: {admin_key[:8]}...{admin_key[-4:]}")
-
-    config = {
+    # Step 5: Ensure API keys exist (preserve any existing config)
+    print_step("Step 5/7: Ensuring API keys")
+    existing = load_plugin_config()
+    defaults = {
         "server_url": "http://localhost:9377",
-        "api_key": api_key,
-        "admin_key": admin_key,
+        "api_key": "",
+        "admin_key": "",
         "default_user_id": "",
         "default_headless": True,
         "default_geo_preset": "",
         "auto_start_server": True,
     }
+    config = {**defaults, **existing}
+
+    if not config["api_key"] or not config["admin_key"]:
+        new_api, new_admin = generate_keys()
+        config["api_key"] = config["api_key"] or new_api
+        config["admin_key"] = config["admin_key"] or new_admin
+        print("  Generated new keys (previous config had none).")
+    else:
+        print("  Reusing existing keys from config.json.")
+
+    api_key = config["api_key"]
+    admin_key = config["admin_key"]
+    print(f"  API Key:   {api_key[:8]}...{api_key[-4:]}")
+    print(f"  Admin Key: {admin_key[:8]}...{admin_key[-4:]}")
+
     save_plugin_config(config)
 
     # Step 6: Start server
