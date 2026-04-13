@@ -83,7 +83,10 @@ class CamofoxSession(Tool):
                 display_mode = "virtual"
             else:
                 display_mode = "headed"
-            shared_state.set_vnc(user_id, vnc_url, display_mode)
+            if display_mode == "headless" or not vnc_url:
+                shared_state.clear_vnc(user_id, "headless")
+            else:
+                shared_state.set_vnc(user_id, vnc_url, display_mode)
             if vnc_url:
                 return (
                     f"Browser now visible via VNC. All previous tabs are invalidated — "
@@ -109,6 +112,8 @@ class CamofoxSession(Tool):
 
         elif action == "destroy":
             resp = await client.delete(f"/sessions/{user_id}")
+            shared_state.set_browsing(user_id, active=False)
+            shared_state.clear_vnc(user_id, "headless")
             return json.dumps(resp, indent=2)
 
         # --- CLI-based actions (optional, graceful degradation) ---

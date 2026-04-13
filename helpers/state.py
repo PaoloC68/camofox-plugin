@@ -12,6 +12,7 @@ import time
 
 _STATE_FILE = "/tmp/camofox_plugin_state.json"
 _BROWSING_ACTIVE_TTL_SECONDS = 120
+_VNC_IDLE_TTL_SECONDS = 10
 
 
 def _read() -> dict:
@@ -35,7 +36,18 @@ def set_vnc(user_id: str, vnc_url: str, display_mode: str) -> None:
     """Write VNC/display state for a userId."""
     data = _read()
     entry = data.get(user_id, {})
-    entry["vnc_url"] = vnc_url
+    entry["vnc_url"] = vnc_url or ""
+    entry["display_mode"] = display_mode
+    entry["ts"] = time.time()
+    data[user_id] = entry
+    _write(data)
+
+
+def clear_vnc(user_id: str, display_mode: str = "headless") -> None:
+    """Clear any persisted VNC URL for a userId and reset the display mode."""
+    data = _read()
+    entry = data.get(user_id, {})
+    entry["vnc_url"] = ""
     entry["display_mode"] = display_mode
     entry["ts"] = time.time()
     data[user_id] = entry
@@ -56,9 +68,20 @@ def set_browsing(user_id: str, active: bool, blocked: bool = False) -> None:
 def _normalize_entry(entry: dict) -> dict:
     normalized = dict(entry)
     ts = float(normalized.get("ts", 0) or 0)
-    is_stale = ts and (time.time() - ts) > _BROWSING_ACTIVE_TTL_SECONDS
-    if normalized.get("browsing") and not normalized.get("blocked") and is_stale:
+    age = time.time() - ts if ts else 0
+    is_browsing_stale = ts and age > _BROWSING_ACTIVE_TTL_SECONDS
+    is_vnc_idle = ts and age > _VNC_IDLE_TTL_SECONDS
+    if normalized.get("browsing") and not normalized.get("blocked") and is_browsing_stale:
         normalized["browsing"] = False
+    if (
+        not normalized.get("browsing")
+        and not normalized.get("blocked")
+        and normalized.get("display_mode", "headless") != "headless"
+        and normalized.get("vnc_url")
+        and is_vnc_idle
+    ):
+        normalized["vnc_url"] = ""
+        normalized["display_mode"] = "headless"
     return normalized
 
 

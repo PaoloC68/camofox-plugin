@@ -80,7 +80,10 @@ class CamofoxVnc(ApiHandler):
                 data={"headless": display_mode},
             )
             vnc_url = data.get("vncUrl", "")
-            shared_state.set_vnc(user_id, vnc_url, display_mode)
+            if display_mode == "headless" or not vnc_url:
+                shared_state.clear_vnc(user_id, "headless")
+            else:
+                shared_state.set_vnc(user_id, vnc_url, display_mode)
             return {
                 "ok": True,
                 "userId": user_id,
