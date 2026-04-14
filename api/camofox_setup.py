@@ -9,6 +9,7 @@ import os
 from helpers.api import ApiHandler, Request
 from usr.plugins.camofox_browser.helpers.config import get_config, normalize_headless_mode
 from usr.plugins.camofox_browser.helpers.client import CamofoxClient, CamofoxConnectionError
+from usr.plugins.camofox_browser.helpers.cli import get_cli_status
 
 
 class CamofoxSetup(ApiHandler):
@@ -64,6 +65,7 @@ class CamofoxSetup(ApiHandler):
         npm_ok = shutil.which("npm") is not None
         server_js = self._find_server_js()
         camofox_ok = server_js is not None
+        cli_status = get_cli_status(auto_install=False)
         websockify_ok = shutil.which("websockify") is not None
         novnc_ok = os.path.isfile("/opt/noVNC/vnc.html")
 
@@ -110,6 +112,10 @@ class CamofoxSetup(ApiHandler):
             "npm_installed": npm_ok,
             "camofox_installed": camofox_ok,
             "camofox_version": camofox_version,
+            "cli_installed": cli_status["installed"],
+            "cli_usable": cli_status["usable"],
+            "cli_path": cli_status["path"],
+            "cli_source": cli_status["source"],
             "websockify_installed": websockify_ok,
             "novnc_installed": novnc_ok,
         }
