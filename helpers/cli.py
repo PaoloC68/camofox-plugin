@@ -25,6 +25,20 @@ def _find_npx() -> str | None:
     return shutil.which("npx")
 
 
+def _is_camofox_package_installed() -> bool:
+    """Check if the global npm package is installed."""
+    try:
+        result = subprocess.run(
+            ["npm", "list", "-g", "camofox-browser", "--depth=0"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        return "camofox-browser" in result.stdout
+    except Exception:
+        return False
+
+
 def _find_camofox_binary() -> str | None:
     """Find the camofox binary on PATH or common locations."""
     found = shutil.which("camofox")
@@ -54,6 +68,108 @@ def _find_camofox_binary() -> str | None:
     return None
 
 
+def install_camofox_package() -> bool:
+    """Install the global npm package that provides the server and CLI."""
+    try:
+        result = subprocess.run(
+            ["npm", "install", "-g", "camofox-browser"],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        if result.returncode != 0:
+            logger.warning("CamoFox CLI auto-install failed: %s", result.stderr.strip())
+            return False
+        return True
+    except Exception as e:
+        logger.warning("CamoFox CLI auto-install raised: %s", e)
+        return False
+
+
+def resolve_camofox_command(
+    binary_path: str | None = None,
+    *,
+    auto_install: bool = True,
+) -> list[str]:
+    """Resolve a usable camofox command, optionally repairing install first."""
+    if binary_path:
+        return [binary_path]
+
+    direct = _find_camofox_binary()
+    if direct:
+        return [direct]
+
+    npx = _find_npx()
+    if npx and _is_camofox_package_installed():
+        return [npx, "camofox"]
+
+    if auto_install and install_camofox_package():
+        direct = _find_camofox_binary()
+        if direct:
+            return [direct]
+        npx = _find_npx()
+        if npx and _is_camofox_package_installed():
+            return [npx, "camofox"]
+
+    raise CamofoxCliNotFoundError(
+        "CamoFox CLI is not available. Automatic repair could not find or install it. "
+        "Install the global npm package `camofox-browser` and ensure either the "
+        "`camofox` binary or `npx camofox` is usable."
+    )
+
+
+def get_cli_status(
+    binary_path: str | None = None,
+    *,
+    auto_install: bool = False,
+) -> dict:
+    """Return current CLI usability without raising."""
+    if binary_path:
+        return {
+            "installed": True,
+            "usable": True,
+            "path": binary_path,
+            "source": "explicit",
+        }
+
+    direct = _find_camofox_binary()
+    if direct:
+        return {
+            "installed": True,
+            "usable": True,
+            "path": direct,
+            "source": "binary",
+        }
+
+    npx = _find_npx()
+    if npx and _is_camofox_package_installed():
+        return {
+            "installed": True,
+            "usable": True,
+            "path": npx,
+            "source": "npx",
+        }
+
+    if auto_install:
+        try:
+            cmd = resolve_camofox_command(binary_path, auto_install=True)
+            return {
+                "installed": True,
+                "usable": True,
+                "path": cmd[0],
+                "source": "auto_install",
+            }
+        except CamofoxCliNotFoundError:
+            pass
+
+    return {
+        "installed": False,
+        "usable": False,
+        "path": None,
+        "source": None,
+    }
+
+
 class CamofoxCli:
     """Subprocess executor for camofox CLI commands.
 
@@ -68,21 +184,7 @@ class CamofoxCli:
 
     def _resolve_command(self) -> list[str]:
         """Lazy resolution — called on first execute(), not in __init__."""
-        if self._explicit_path:
-            return [self._explicit_path]
-        # Try direct binary first (faster)
-        direct = _find_camofox_binary()
-        if direct:
-            return [direct]
-        # Fall back to npx (always works if npm package is installed)
-        npx = _find_npx()
-        if npx:
-            return [npx, "camofox"]
-        raise CamofoxCliNotFoundError(
-            "CamoFox CLI is not available. The camofox binary and npx were not found. "
-            "CLI-based actions (session save/load, auth vault) require the CLI. "
-            "REST-based actions (open, snapshot, click, navigate, search) work without it."
-        )
+        return resolve_camofox_command(self._explicit_path, auto_install=True)
 
     async def execute(self, *args: str, timeout: int = 30) -> dict:
         """Run a camofox CLI command and return parsed JSON output."""
