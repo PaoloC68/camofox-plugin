@@ -8,6 +8,7 @@ export const store = createStore("camofox", {
     connected: false,
     vncUrl: null,
     _rawVncUrl: null,          // tracks the untokenized VNC URL to detect real changes
+    _vncSessionKey: null,      // increments when backend starts a new visible-browser session
     _vncUrlSetAt: 0,           // timestamp when vncUrl was last set (for token refresh)
     panelVisible: false,
     panelMinimized: false,
@@ -96,6 +97,7 @@ export const store = createStore("camofox", {
                 this.onDisplayToggle({
                     vncUrl: state.vnc_url || null,
                     vncUrlRaw: state.vnc_url_raw || null,
+                    vncSessionKey: state.vnc_session_key || null,
                     displayMode: state.display_mode || "headless",
                 });
             }
@@ -110,14 +112,21 @@ export const store = createStore("camofox", {
         // every 3 seconds and cause a reconnection loop.
         const newRaw = data.vncUrlRaw || data.vncUrl || null;
         const oldRaw = this._rawVncUrl;
+        const newSessionKey = data.vncSessionKey || null;
+        const oldSessionKey = this._vncSessionKey;
         // Refresh when: raw URL actually changed, or the token is
-        // approaching expiration (50 min — token TTL is 1 hour).
+        // approaching expiration (50 min — token TTL is 1 hour), or the
+        // backend reports a new visible-browser session over the same URL.
         const tokenAge = Date.now() - this._vncUrlSetAt;
-        const needsRefresh = newRaw !== oldRaw || (newRaw && tokenAge > 3_000_000);
+        const needsRefresh =
+            newRaw !== oldRaw ||
+            newSessionKey !== oldSessionKey ||
+            (newRaw && tokenAge > 3_000_000);
         if (needsRefresh) {
             this._rawVncUrl = newRaw;
+            this._vncSessionKey = newSessionKey;
             this.vncUrl = data.vncUrl || null;
-            this._vncUrlSetAt = Date.now();
+            this._vncUrlSetAt = newRaw ? Date.now() : 0;
         }
         this.displayMode = data.displayMode || "headless";
         // Auto-show panel when a VNC URL first appears while the agent
@@ -165,6 +174,7 @@ export const store = createStore("camofox", {
             this.onDisplayToggle({
                 vncUrl: state.vnc_url || null,
                 vncUrlRaw: state.vnc_url_raw || null,
+                vncSessionKey: state.vnc_session_key || null,
                 displayMode: state.display_mode || "headless",
             });
             this.panelVisible = true;
