@@ -103,4 +103,7 @@ def viewer_state_for_request(state: dict, request=None, server_url: str = "") ->
     result["vnc_url_raw"] = raw_vnc_url
     result["vnc_url"] = normalized_vnc_url
     result["vnc_url_rewritten"] = normalized_vnc_url != raw_vnc_url
+    vnc_ts = result.get("vnc_ts") or result.get("ts")
+    if vnc_ts:
+        result["vnc_session_key"] = str(int(float(vnc_ts) * 1000))
     return result
