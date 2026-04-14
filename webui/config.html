@@ -139,6 +139,10 @@
                     <span class="material-symbols-outlined">desktop_windows</span>
                     <span>Visible browser mode is incomplete. Install `websockify` and noVNC assets, then the embedded viewer will work through the normal Agent Zero URL.</span>
                 </div>
+                <div x-show="installInfo && !installInfo.cli_usable" class="camofox-banner warn" style="margin-top:4px;">
+                    <span class="material-symbols-outlined">terminal</span>
+                    <span>The CamoFox CLI is not currently usable. Initial setup should install it, and CLI-backed tools will try a lazy auto-repair when first used.</span>
+                </div>
             </div>
 
             <!-- SECTION: Connection -->
