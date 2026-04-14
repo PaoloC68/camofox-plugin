@@ -32,13 +32,22 @@ def _write(data: dict) -> None:
     os.replace(tmp, _STATE_FILE)
 
 
+def _update_last_activity(entry: dict) -> None:
+    entry["ts"] = max(
+        float(entry.get("browsing_ts", 0) or 0),
+        float(entry.get("vnc_ts", 0) or 0),
+    )
+
+
 def set_vnc(user_id: str, vnc_url: str, display_mode: str) -> None:
     """Write VNC/display state for a userId."""
     data = _read()
     entry = data.get(user_id, {})
+    now = time.time()
     entry["vnc_url"] = vnc_url or ""
     entry["display_mode"] = display_mode
-    entry["ts"] = time.time()
+    entry["vnc_ts"] = now
+    _update_last_activity(entry)
     data[user_id] = entry
     _write(data)
 
@@ -47,9 +56,11 @@ def clear_vnc(user_id: str, display_mode: str = "headless") -> None:
     """Clear any persisted VNC URL for a userId and reset the display mode."""
     data = _read()
     entry = data.get(user_id, {})
+    now = time.time()
     entry["vnc_url"] = ""
     entry["display_mode"] = display_mode
-    entry["ts"] = time.time()
+    entry["vnc_ts"] = now
+    _update_last_activity(entry)
     data[user_id] = entry
     _write(data)
 
@@ -58,19 +69,41 @@ def set_browsing(user_id: str, active: bool, blocked: bool = False) -> None:
     """Write browsing activity state for a userId."""
     data = _read()
     entry = data.get(user_id, {})
+    now = time.time()
     entry["browsing"] = active
     entry["blocked"] = blocked if active else False
-    entry["ts"] = time.time()
+    entry["browsing_ts"] = now
+    _update_last_activity(entry)
     data[user_id] = entry
     _write(data)
 
 
 def _normalize_entry(entry: dict) -> dict:
     normalized = dict(entry)
-    ts = float(normalized.get("ts", 0) or 0)
-    age = time.time() - ts if ts else 0
-    is_browsing_stale = ts and age > _BROWSING_ACTIVE_TTL_SECONDS
-    is_vnc_idle = ts and age > _VNC_IDLE_TTL_SECONDS
+    legacy_ts = float(normalized.get("ts", 0) or 0)
+    browsing_ts = float(
+        normalized.get(
+            "browsing_ts",
+            legacy_ts if normalized.get("browsing") or normalized.get("blocked") else 0,
+        )
+        or 0
+    )
+    vnc_ts = float(
+        normalized.get(
+            "vnc_ts",
+            legacy_ts
+            if normalized.get("vnc_url")
+            or normalized.get("display_mode", "headless") != "headless"
+            else 0,
+        )
+        or 0
+    )
+    normalized["browsing_ts"] = browsing_ts
+    normalized["vnc_ts"] = vnc_ts
+    browsing_age = time.time() - browsing_ts if browsing_ts else 0
+    vnc_age = time.time() - vnc_ts if vnc_ts else 0
+    is_browsing_stale = browsing_ts and browsing_age > _BROWSING_ACTIVE_TTL_SECONDS
+    is_vnc_idle = vnc_ts and vnc_age > _VNC_IDLE_TTL_SECONDS
     if normalized.get("browsing") and not normalized.get("blocked") and is_browsing_stale:
         normalized["browsing"] = False
     # Clear idle VNC URL after timeout, but preserve the user-selected
@@ -83,6 +116,7 @@ def _normalize_entry(entry: dict) -> dict:
         and is_vnc_idle
     ):
         normalized["vnc_url"] = ""
+    _update_last_activity(normalized)
     return normalized
 
 
