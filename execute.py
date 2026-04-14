@@ -16,6 +16,7 @@ import time
 
 try:
     from usr.plugins.camofox_browser.helpers.config import normalize_headless_mode
+    from usr.plugins.camofox_browser.helpers.cli import resolve_camofox_command
 except ModuleNotFoundError:
     def normalize_headless_mode(value):
         """Local fallback for standalone script execution outside framework PYTHONPATH."""
@@ -29,6 +30,9 @@ except ModuleNotFoundError:
             return "false"
         return "true"
 
+    def resolve_camofox_command(binary_path=None, auto_install=True):
+        raise RuntimeError("CamoFox CLI helper unavailable")
+        
 
 def print_step(msg):
     print(f"\n{'='*60}")
@@ -240,6 +244,25 @@ def install_camofox():
 
     print("  CamoFox installed successfully.")
     return True
+
+def ensure_cli_available_for_setup() -> bool:
+    """Verify the CLI is resolvable after installation/repair."""
+    print_step("Verifying CamoFox CLI")
+    try:
+        command = resolve_camofox_command(auto_install=True)
+        print(f"  CamoFox CLI ready via: {' '.join(command)}")
+        return True
+    except Exception as e:
+        print(f"  ERROR: CamoFox CLI is not usable: {e}")
+        return False
+
+
+def ensure_camofox_installation() -> bool:
+    """Ensure the npm package is installed and the CLI is usable."""
+    if not is_camofox_installed():
+        if not install_camofox():
+            return False
+    return ensure_cli_available_for_setup()
 
 
 def fetch_camoufox_browser():
@@ -517,9 +540,8 @@ def main():
         server_js = find_server_js()
         if server_js:
             print(f"  Server at: {server_js}")
-    else:
-        if not install_camofox():
-            return 1
+    if not ensure_camofox_installation():
+        return 1
 
     # Step 4: Download Camoufox browser binary
     print_step("Step 4/7: Checking Camoufox browser binary")
